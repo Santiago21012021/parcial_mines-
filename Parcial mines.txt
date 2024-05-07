@@ -1,0 +1,144 @@
+--Ejercicio 1
+create or replace function anhos_persona(persona persons.persons_id%type)
+return number
+is 
+var_birthdate date;
+fecha_actual date;
+edad number;
+BEGIN 
+ select birthdate into var_birthdate from persons where persons_id = persona;
+ fecha_actual:=sysdate;
+ edad:=(fecha_actual-var_birthdate)/365;
+ return edad;
+End;
+select anhos_persona(220) from dual;
+
+
+
+
+--ejercicio 2
+CREATE OR REPLACE TRIGGER validar_ingreso
+before insert or update
+ON workers
+FOR EACH ROW
+    DECLARE
+        var_edad NUMBER;
+        var_healthy NUMBER;
+        BEGIN
+            SELECT EXTRACT(YEAR FROM CURRENT_DATE)-EXTRACT(YEAR FROM BIRTHDATE)
+                INTO var_edad FROM PERSONS 
+                    WHERE persons_id=:NEW.persons_id;
+            SELECT diagnostics_id into var_healthy
+                from persons_medical_check
+                    where persons_id=:NEW.persons_id;
+            IF(var_healthy!=1) then
+                raise_application_error(-20001,'La persona con el id' || :NEW.persons_id || 'NO ESTA EN CONDICIONES');
+            END IF;
+            IF(var_edad<12 OR var_edad>70) then
+                raise_application_error(-20001,'La PERSONA CON EL ID ' || :NEW.persons_id || 'NO PUEDE SER UN TRABAJADOR');
+            END IF;
+            
+    END validar_ingreso;
+
+--Ejercicio 3
+create or replace procedure 
+registrar_trabajador(worker_id workers.workers_id%type, mines_id workers.mines_id%type,
+persons_id workers.persons_id%type, fecha_ingreso workers.ingressdate%type)
+as
+v_persona_id workers.persons_id%TYPE;
+Begin 
+      SELECT persons_id INTO v_persona_id
+    FROM persons where persons_id=persons_id;
+      IF v_persona_id IS NULL THEN
+        RAISE_APPLICATION_ERROR(-20001, 'La persona no existe en la base de datos.');
+    END IF;
+  insert into workers (workers_id, mines_id, persons_id, ingressdate) values (worker_id, mines_id, persons_id, fecha_ingreso);
+  
+  DBMS_OUTPUT.PUT_LINE('Trabajador registrado exitosamente.');
+  end;
+ 
+  execute registrar_trabajador();
+set SERVEROUTPUT on;
+
+
+--Ejercicio 4
+DECLARE
+  v_mines_id NUMBER(10);
+  CURSOR c_cursor IS
+    SELECT p.persons_id, p.name, p.lastname, p.birthdate
+    FROM persons p
+    INNER JOIN workers w ON p.persons_id = w.persons_id
+    WHERE p.sex = 'F'
+    AND w.mines_id = v_mines_id;
+BEGIN
+  DBMS_OUTPUT.PUT_LINE('Ingrese el ID de la mina: ');
+  v_mines_id := &INGRESA_EL_ID_DE_LA_MINA;
+  FOR i IN c_cursor
+  LOOP
+    DBMS_OUTPUT.PUT_LINE('ID:'||i.persons_id);
+    DBMS_OUTPUT.PUT_LINE('NAME:'||i.name);
+    DBMS_OUTPUT.PUT_LINE('LASTNAME:'||i.lastname);
+    DBMS_OUTPUT.PUT_LINE('BIRTHDATE:'||i.birthdate);
+    DBMS_OUTPUT.PUT_LINE('------------------------');
+  END LOOP;
+END;
+
+set SERVEROUTPUT on;
+--Ejercicio 5
+CREATE OR REPLACE FUNCTION deadOrLive(
+var_personId persons_defuntions.persons_id%type
+)
+RETURN VARCHAR2
+IS  
+    tipe_death NUMBER;
+    deadOrNoet VARCHAR(100);
+    BEGIN
+        SELECT DEATHS_ID INTO tipe_death FROM persons_defuntions 
+        WHERE persons_id=var_personId;
+        IF(tipe_death>=1 AND tipe_death<=5)THEN
+            deadOrNoet:='EL USUARIO ESTA MUERTO';
+        END IF;
+        RETURN deadOrNoet;
+        EXCEPTION
+            WHEN NO_DATA_FOUND  THEN
+            tipe_death:=0;
+            deadOrNoet:='EL USUARIO ESTA VIVO';
+            RETURN deadOrNoet;
+END deadOrLive ;
+
+SELECT deadOrLive(1)FROM DUAL ;
+SELECT deadOrLive(135)FROM DUAL ;
+
+
+--Ejercicio 7
+declare
+cursor cur_07 is
+SELECT p.persons_id as id, p.name as nombre, p.lastname as apellido,p.sex as sexo,(sysdate - p.birthdate)/365 as edad FROM persons p
+INNER JOIN persons_defuntions pf ON pf.persons_id = p.persons_id
+WHERE (sysdate - p.birthdate) <= 6570 ;
+
+begin
+for i in cur_07 loop
+DBMS_OUTPUT.PUT_LINE('ID: ' || i.id ||'  NOMBRE: ' || i.nombre || ' APELLIDO: ' || i.apellido ||'  SEXO: ' || i.sexo || ' EDAD: ' || i.edad );
+end loop;
+end;
+
+
+
+--Ejercicio 8
+create or replace procedure prc_8
+(mina mines.MINE_NAME%type )
+as
+cantvih number;
+begin
+SELECT count (*) into cantvih
+FROM persons p 
+INNER JOIN persons_medical_check pmc ON p.persons_id = pmc.persons_id
+INNER JOIN workers w ON p.persons_id = w.persons_id 
+INNER JOIN mines m ON w.mines_id = m.mines_id 
+WHERE LOWER(m.mine_name) = LOWER(mina) AND pmc.diagnostics_id = 3;
+DBMS_OUTPUT.PUT_LINE('LA CANTIDAD DE PACIENTES CON VIH EN LA MINA: '||mina|| ' ES DE: ' ||cantvih);
+
+END;
+
+EXECUTE prc_8('&mina');
